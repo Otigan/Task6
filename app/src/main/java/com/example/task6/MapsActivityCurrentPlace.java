@@ -11,6 +11,7 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
@@ -18,6 +19,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
+import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.CameraUpdateFactory;
@@ -28,11 +30,21 @@ import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.PointOfInterest;
 import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
 
 import com.google.android.libraries.places.api.Places;
+import com.google.android.libraries.places.api.model.Place;
+import com.google.android.libraries.places.api.net.FetchPlaceRequest;
+import com.google.android.libraries.places.api.net.FetchPlaceResponse;
 import com.google.android.libraries.places.api.net.PlacesClient;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * An activity that displays a map showing the place at the device's current location.
@@ -67,6 +79,7 @@ public class MapsActivityCurrentPlace extends AppCompatActivity
 
     //Two places
     private DefaultPlaces defaultPlaces;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -140,7 +153,7 @@ public class MapsActivityCurrentPlace extends AppCompatActivity
      * This callback is triggered when the map is ready to be used.
      */
     @Override
-    public void onMapReady(GoogleMap map) {
+    public void onMapReady(final GoogleMap map) {
         mMap = map;
 
         // Use a custom info window adapter to handle multiple lines of text in the
@@ -168,6 +181,68 @@ public class MapsActivityCurrentPlace extends AppCompatActivity
                 return infoWindow;
             }
         });
+
+        //Setting clicker on map places
+       map.setOnPoiClickListener(new GoogleMap.OnPoiClickListener() {
+           @Override
+           public void onPoiClick(PointOfInterest pointOfInterest) {
+
+               //Getting coordinates of place
+               final LatLng latlng = pointOfInterest.latLng;
+
+               //Getting place id so we can find it by using Places API
+               final String placeId = pointOfInterest.placeId;
+
+               //Creating list of place parameters that we need from Places API response
+               List<Place.Field> placeFields = Arrays.asList(Place.Field.ID, Place.Field.NAME, Place.Field.ADDRESS,
+                       Place.Field.PHONE_NUMBER);
+
+               //Creating request to Places API
+               FetchPlaceRequest request = FetchPlaceRequest.newInstance(placeId, placeFields);
+
+               //Fetching the result
+               mPlacesClient.fetchPlace(request).addOnSuccessListener(new OnSuccessListener<FetchPlaceResponse>() {
+                   @Override
+                   public void onSuccess(FetchPlaceResponse fetchPlaceResponse) {
+                       Place place = fetchPlaceResponse.getPlace();
+
+                       // Creating a marker
+                       MarkerOptions markerOptions = new MarkerOptions();
+
+                       // Setting the position for the marker
+                       markerOptions.position(latlng);
+
+
+                       String place_info = "";
+
+                       //Adding place info
+                       place_info += "Название: " + place.getName() + "\n";
+                       place_info += "Адрес: " + place.getAddress() + "\n";
+                       place_info += "Номер телефона: " + place.getPhoneNumber();
+
+                       // Setting the title for the marker.
+                       // This will be displayed on taping the marker
+                       markerOptions.title(place_info);
+
+                       // Clears the previously touched position
+                       mMap.clear();
+
+                       // Animating to the touched position
+                       mMap.animateCamera(CameraUpdateFactory.newLatLng(latlng));
+
+                       // Placing a marker on the touched position
+                       mMap.addMarker(markerOptions);
+
+                   }
+               }).addOnFailureListener(new OnFailureListener() {
+                   @Override
+                   public void onFailure(@NonNull Exception e) {
+                       //Getting error message
+                        Toast.makeText(getApplicationContext(), e.getMessage(), Toast.LENGTH_LONG).show();
+                   }
+               });
+           }
+       });
 
         // Prompt the user for permission.
         getLocationPermission();
